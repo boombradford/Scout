@@ -1,0 +1,261 @@
+/* ============================================================
+   CheckStepper — compact animated stepper for CI/CD checks
+   Uses only CSS animations + transforms for GPU-accelerated perf
+   ============================================================ */
+
+/* --- Container --- */
+.check-stepper {
+  --color-pending: #6b7280;
+  --color-running: #3b82f6;
+  --color-passed: #22c55e;
+  --color-failed: #ef4444;
+  --color-skipped: #a3a3a3;
+  --transition-speed: 0.3s;
+
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  background: #1c1c1e;
+  border: 1px solid #2c2c2e;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: #e5e5e5;
+}
+
+.stepper-title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --- Summary / Progress Bar --- */
+.stepper-summary {
+  margin-bottom: 20px;
+}
+
+.progress-track {
+  height: 4px;
+  background: #2c2c2e;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-passed);
+  border-radius: 2px;
+  transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+}
+
+.progress-fill.has-failures {
+  background: linear-gradient(90deg, var(--color-passed), var(--color-failed));
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* --- Steps List --- */
+.stepper-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Individual Step --- */
+.step-item {
+  display: flex;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: step-enter var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--step-index) * 60ms);
+}
+
+@keyframes step-enter {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 20px;
+}
+
+.step-icon-wrapper {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  transition: transform var(--transition-speed);
+}
+
+.step-item.step-passed .step-icon-wrapper {
+  transform: scale(1);
+  animation: pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Connector line between steps */
+.step-connector {
+  width: 2px;
+  flex: 1;
+  min-height: 12px;
+  background: #2c2c2e;
+  margin: 4px 0;
+  border-radius: 1px;
+  transition: background var(--transition-speed);
+}
+
+.step-item.step-passed .step-connector {
+  background: var(--color-passed);
+}
+
+.step-item.step-failed .step-connector {
+  background: var(--color-failed);
+}
+
+.step-item.step-running .step-connector {
+  background: linear-gradient(180deg, var(--color-running) 0%, #2c2c2e 100%);
+}
+
+/* --- Step Content --- */
+.step-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 16px;
+  min-height: 20px;
+  justify-content: center;
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  transition: color var(--transition-speed);
+}
+
+.step-pending .step-label {
+  color: var(--color-pending);
+}
+
+.step-running .step-label {
+  color: var(--color-running);
+}
+
+.step-passed .step-label {
+  color: var(--color-passed);
+}
+
+.step-failed .step-label {
+  color: var(--color-failed);
+}
+
+.step-skipped .step-label {
+  color: var(--color-skipped);
+  text-decoration: line-through;
+}
+
+.step-description {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* --- Status Icons --- */
+.status-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.status-icon.pending {
+  color: var(--color-pending);
+}
+
+.status-icon.running {
+  color: var(--color-running);
+}
+
+.status-icon.passed {
+  color: var(--color-passed);
+}
+
+.status-icon.failed {
+  color: var(--color-failed);
+}
+
+.status-icon.skipped {
+  color: var(--color-skipped);
+}
+
+/* Spinner animation — GPU-accelerated rotation */
+.spinner {
+  transform-origin: center;
+  animation: spin 0.8s linear infinite;
+  will-change: transform;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Done states (subtle glow) --- */
+.check-stepper.done-pass {
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.check-stepper.done-fail {
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+/* --- Light mode --- */
+@media (prefers-color-scheme: light) {
+  .check-stepper {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    color: #1f2937;
+  }
+
+  .progress-track,
+  .step-connector {
+    background: #e5e7eb;
+  }
+
+  .step-item.step-running .step-connector {
+    background: linear-gradient(180deg, var(--color-running) 0%, #e5e7eb 100%);
+  }
+
+  .step-description {
+    color: #9ca3af;
+  }
+
+  .progress-text {
+    color: #6b7280;
+  }
+
+  .check-stepper.done-pass {
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .check-stepper.done-fail {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+}
