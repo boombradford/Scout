@@ -138,6 +138,53 @@ Scout/
 
 ---
 
+## Addressing Slow Checks and Fetch Failures
+
+### Problem: Fetching Information Fails
+
+When CI or local tooling can't fetch data (coverage reports, dependencies, remote branches), builds stall or fail silently.
+
+**Solutions:**
+- **Cache dependencies** — Use CI caching (e.g., `actions/cache` for `node_modules`, `.pip_cache`, Go module cache) so fetches only happen when lockfiles change
+- **Pin dependency versions** — Avoid `latest` tags that cause inconsistent fetches; use exact versions in lockfiles
+- **Add retry logic with timeouts** — Network calls in CI should retry with exponential backoff (2s, 4s, 8s) and hard timeout caps
+- **Fail fast on fetch errors** — Don't silently continue when a fetch fails; surface the error immediately with `set -e` in shell scripts
+- **Use a fallback/offline mode** — For coverage uploads (Codecov, Coveralls), make the upload step non-blocking so a third-party outage doesn't block your PR
+
+### Problem: Checks Take Too Long
+
+Slow CI is the top reason developers skip running tests locally and ignore CI feedback.
+
+**Solutions:**
+- **Split test suites by speed** — Run unit tests first (seconds), then integration (minutes), then E2E (minutes). Fail fast on the cheapest tests.
+- **Parallelize test execution** — Use CI matrix strategies to run test shards concurrently:
+  ```yaml
+  strategy:
+    matrix:
+      shard: [1, 2, 3, 4]
+  steps:
+    - run: npm test -- --shard=${{ matrix.shard }}/4
+  ```
+- **Only run affected tests** — Use tools like `jest --changedSince=main` or `nx affected:test` to skip tests for unchanged code
+- **Set per-job timeouts** — Add `timeout-minutes: 10` to CI jobs so a hung test doesn't block the queue for 60 minutes
+- **Avoid redundant work** — Don't install, lint, typecheck, and test in a single serial job. Parallelize them:
+  ```yaml
+  jobs:
+    lint:     ...  # ~30s
+    typecheck: ... # ~30s
+    test:      ... # ~2min
+  ```
+- **Cache aggressively** — Cache `node_modules`, build artifacts, and Docker layers between runs
+- **Profile slow tests** — Identify the slowest 10 tests and optimize or split them. A single 30s integration test in the unit suite slows everything down.
+- **Use `concurrency` groups** — Cancel outdated CI runs when a new commit is pushed to the same PR:
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  ```
+
+---
+
 ## Key Principles
 
 1. **Test early, test always** — Establish tests alongside the first lines of code, not after.
