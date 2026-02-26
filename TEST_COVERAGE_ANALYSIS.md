@@ -185,6 +185,185 @@ Slow CI is the top reason developers skip running tests locally and ignore CI fe
 
 ---
 
+## Diagnosing and Fixing Test Runner Timeouts (Priority: Critical)
+
+When the test runner itself is consistently slow and timing out, the problem is usually deeper than CI configuration — it points to issues in the tests or the test environment. Here's a systematic approach:
+
+### Step 1: Identify What's Slow
+
+Before fixing anything, measure. Most frameworks have built-in profiling:
+
+```bash
+# Jest — show the 10 slowest tests
+npx jest --verbose --logHeapUsage 2>&1 | sort -t'(' -k2 -rn | head -20
+
+# pytest — show the 10 slowest tests
+pytest --durations=10
+
+# Go — show test timing per package
+go test -v ./... 2>&1 | grep -E "^(ok|FAIL)"
+
+# Vitest
+npx vitest --reporter=verbose
+```
+
+This almost always reveals a handful of tests responsible for most of the time.
+
+### Step 2: Common Root Causes and Fixes
+
+#### 2a. Tests Making Real Network Calls
+
+**Symptom:** Tests hang or take 30s+ each, especially when network is slow or unavailable.
+
+**Fix:** Mock all external HTTP calls. No test should ever hit a real network endpoint.
+```javascript
+// Before (slow, flaky)
+const res = await fetch('https://api.example.com/data');
+
+// After (fast, deterministic)
+jest.spyOn(global, 'fetch').mockResolvedValue({ json: () => mockData });
+```
+
+**Enforce it:** Block outbound network in the test environment:
+```bash
+# In CI, use network isolation
+unshare --net -- npm test
+```
+
+#### 2b. Tests Waiting on Real Databases or Services
+
+**Symptom:** Tests take seconds each because they wait for DB connections, seed data, or container spinup.
+
+**Fix:**
+- Use **in-memory databases** (SQLite for SQL tests, in-memory stores for Redis)
+- Use **test containers** that start once and are shared across the suite, not per-test
+- **Pre-seed once** in a global setup, not in every `beforeEach`
+
+```javascript
+// Bad — spins up a connection per test
+beforeEach(async () => { db = await connectToDatabase(); });
+
+// Good — one connection for the whole suite
+beforeAll(async () => { db = await connectToDatabase(); });
+afterAll(async () => { await db.close(); });
+```
+
+#### 2c. Unnecessary `setTimeout` / `sleep` / Polling in Tests
+
+**Symptom:** Tests contain hardcoded waits like `await sleep(5000)` or `setTimeout(..., 3000)`.
+
+**Fix:** Use fake timers so time-dependent tests run instantly:
+```javascript
+// Jest
+jest.useFakeTimers();
+// ... trigger the code that uses setTimeout
+jest.runAllTimers(); // Instantly resolves all pending timers
+```
+
+```python
+# pytest with freezegun
+from freezegun import freeze_time
+
+@freeze_time("2026-01-01")
+def test_expiry():
+    assert token.is_expired() == True
+```
+
+#### 2d. Tests Running Serially That Could Run in Parallel
+
+**Symptom:** 200 tests take 10 minutes because they run one at a time.
+
+**Fix:** Enable parallel execution:
+```bash
+# Jest (default is parallel by file)
+npx jest --maxWorkers=4
+
+# pytest
+pip install pytest-xdist
+pytest -n auto   # auto-detect CPU count
+
+# Go (parallel by default per package, add -parallel for intra-package)
+go test -parallel=4 ./...
+```
+
+#### 2e. Memory Leaks Causing GC Pauses
+
+**Symptom:** Tests start fast but slow down dramatically as the suite progresses. The runner eventually OOMs or times out.
+
+**Fix:**
+- Add `--logHeapUsage` (Jest) to track memory over time
+- Ensure tests tear down resources in `afterEach`/`afterAll` (close DB connections, clear caches, remove event listeners)
+- Run tests with `--forceExit` as a diagnostic (if it exits faster, something isn't being cleaned up)
+- Use `--detectOpenHandles` (Jest) to find leaked async resources
+
+#### 2f. Global Setup/Teardown Taking Too Long
+
+**Symptom:** The runner spends minutes before/after the actual tests.
+
+**Fix:**
+- Profile `globalSetup` and `globalTeardown` scripts separately
+- Cache expensive setup (e.g., build steps) instead of redoing them every run
+- Use Docker layer caching for test containers
+
+### Step 3: Enforce Per-Test Timeouts
+
+Don't let a single runaway test kill the whole suite. Set aggressive per-test timeouts:
+
+```javascript
+// jest.config.js
+module.exports = {
+  testTimeout: 5000, // 5s per test — any test slower than this is a bug
+};
+```
+
+```python
+# pytest.ini
+[pytest]
+timeout = 10
+```
+
+```go
+// Go — per test
+func TestSomething(t *testing.T) {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    // ... use ctx
+}
+```
+
+### Step 4: Enforce a Time Budget in CI
+
+Set a hard ceiling so timeout issues surface immediately instead of silently burning CI minutes:
+
+```yaml
+# GitHub Actions
+jobs:
+  test:
+    timeout-minutes: 5       # Kill the whole job after 5 min
+    steps:
+      - run: npm test
+        timeout-minutes: 3   # Kill just the test step after 3 min
+```
+
+### Step 5: Track Test Duration Over Time
+
+Catch regressions before they become timeouts:
+- Store test durations as a CI artifact or report metric
+- Alert when any test exceeds a threshold (e.g., > 2s for a unit test)
+- Tools: Jest's `--json` reporter, pytest-json-report, custom CI dashboards
+
+### Quick Reference: Target Test Durations
+
+| Test Type    | Target per test | Whole suite target |
+|-------------|----------------|-------------------|
+| Unit test    | < 50ms          | < 30s              |
+| Integration  | < 2s            | < 2min             |
+| E2E          | < 10s           | < 5min             |
+
+Any test exceeding these thresholds should be investigated and optimized.
+
+---
+
 ## Key Principles
 
 1. **Test early, test always** — Establish tests alongside the first lines of code, not after.
