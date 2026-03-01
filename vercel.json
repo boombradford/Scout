@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd scout-ui && npm install && npm run build",
+  "outputDirectory": "scout-ui/dist",
+  "installCommand": "cd scout-ui && npm install",
+  "framework": "vite"
+}
