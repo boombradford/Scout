@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from "react";
-import type { CheckStep } from "./components/types";
+import { useReducer, useCallback, useRef } from "react";
+import type { CheckStep, CheckStatus } from "./components/types";
 
 const INITIAL_CHECKS: CheckStep[] = [
   { id: "lint", label: "Lint", description: "Checking code style..." },
@@ -11,59 +11,85 @@ const INITIAL_CHECKS: CheckStep[] = [
   { id: "deploy-preview", label: "Deploy preview", description: "Provisioning preview environment..." },
 ].map((c) => ({ ...c, status: "pending" as const }));
 
+type State = {
+  steps: CheckStep[];
+  isRunning: boolean;
+};
+
+type Action =
+  | { type: "RESET" }
+  | { type: "START" }
+  | { type: "SET_STATUS"; index: number; status: CheckStatus; elapsedMs?: number }
+  | { type: "FINISH" };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "RESET":
+      return { steps: INITIAL_CHECKS, isRunning: false };
+    case "START":
+      return { ...state, isRunning: true };
+    case "SET_STATUS":
+      return {
+        ...state,
+        steps: state.steps.map((s, i) =>
+          i === action.index
+            ? { ...s, status: action.status, elapsedMs: action.elapsedMs }
+            : s
+        ),
+      };
+    case "FINISH":
+      return { ...state, isRunning: false };
+  }
+}
+
 export function useCheckSimulation() {
-  const [steps, setSteps] = useState<CheckStep[]>(INITIAL_CHECKS);
-  const [isRunning, setIsRunning] = useState(false);
+  const [state, dispatch] = useReducer(reducer, {
+    steps: INITIAL_CHECKS,
+    isRunning: false,
+  });
   const timeoutIds = useRef<number[]>([]);
 
   const reset = useCallback(() => {
     timeoutIds.current.forEach(clearTimeout);
     timeoutIds.current = [];
-    setSteps(INITIAL_CHECKS);
-    setIsRunning(false);
+    dispatch({ type: "RESET" });
   }, []);
 
   const run = useCallback(() => {
     reset();
-    setIsRunning(true);
+    dispatch({ type: "START" });
 
     let cumulativeDelay = 0;
 
     INITIAL_CHECKS.forEach((_, i) => {
-      // Mark step as running
       const runDelay = cumulativeDelay;
       timeoutIds.current.push(
         window.setTimeout(() => {
-          setSteps((prev) =>
-            prev.map((s, j) => (j === i ? { ...s, status: "running" } : s))
-          );
+          dispatch({ type: "SET_STATUS", index: i, status: "running" });
         }, runDelay)
       );
 
-      // Simulate variable durations — some checks are fast, some slower
-      const duration = 400 + Math.random() * 800;
+      const duration = Math.round(400 + Math.random() * 800);
       cumulativeDelay += duration;
 
-      // Mark step as passed/failed
       timeoutIds.current.push(
         window.setTimeout(() => {
-          setSteps((prev) =>
-            prev.map((s, j) => {
-              if (j !== i) return s;
-              // 90% pass rate for demo realism — integration test fails sometimes
-              const passed = i === 3 ? Math.random() > 0.4 : Math.random() > 0.08;
-              return { ...s, status: passed ? "passed" : "failed" };
-            })
-          );
+          // 90% pass rate; integration test (index 3) fails more often
+          const passed = i === 3 ? Math.random() > 0.4 : Math.random() > 0.08;
+          dispatch({
+            type: "SET_STATUS",
+            index: i,
+            status: passed ? "passed" : "failed",
+            elapsedMs: duration,
+          });
 
-          // If this is the last step, mark as done
           if (i === INITIAL_CHECKS.length - 1) {
-            setIsRunning(false);
+            dispatch({ type: "FINISH" });
           }
         }, cumulativeDelay)
       );
     });
   }, [reset]);
 
-  return { steps, isRunning, run, reset };
+  return { steps: state.steps, isRunning: state.isRunning, run, reset };
 }
