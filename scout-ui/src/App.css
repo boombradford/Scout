@@ -4,6 +4,7 @@
   align-items: center;
   padding: 48px 24px;
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
 }
 
@@ -37,16 +38,20 @@
 .controls {
   display: flex;
   gap: 12px;
+  width: 100%;
+  justify-content: center;
 }
 
 .btn {
-  padding: 8px 20px;
+  padding: 10px 24px;
+  min-height: 44px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   border: none;
   transition: opacity 0.15s, transform 0.1s;
+  touch-action: manipulation;
 }
 
 .btn:active {
@@ -63,17 +68,43 @@
   color: #fff;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
 .btn-secondary {
   background: #2c2c2e;
   color: #e5e5e5;
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: #3a3a3c;
+/* Hover only on devices that support it (prevents stuck hover on touch) */
+@media (hover: hover) {
+  .btn-primary:hover:not(:disabled) {
+    background: #2563eb;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: #3a3a3c;
+  }
+}
+
+/* --- Mobile: <= 480px --- */
+@media (max-width: 480px) {
+  .app {
+    padding: 24px 16px;
+  }
+
+  .app-header {
+    margin-bottom: 24px;
+  }
+
+  .app-header h1 {
+    font-size: 24px;
+  }
+
+  .controls {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
 }
 
 @media (prefers-color-scheme: light) {
@@ -81,7 +112,9 @@
     background: #f3f4f6;
     color: #1f2937;
   }
+}
 
+@media (prefers-color-scheme: light) and (hover: hover) {
   .btn-secondary:hover:not(:disabled) {
     background: #e5e7eb;
   }

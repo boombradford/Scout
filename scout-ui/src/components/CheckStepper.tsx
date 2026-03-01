@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CheckStep } from "./types";
 import { StepItem } from "./StepItem";
 import "./CheckStepper.css";
@@ -8,8 +8,27 @@ interface CheckStepperProps {
   title?: string;
 }
 
+const MOBILE_BREAKPOINT = 480;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth <= MOBILE_BREAKPOINT
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isMobile;
+}
+
 export function CheckStepper({ steps, title }: CheckStepperProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useIsMobile();
+  const [userToggled, setUserToggled] = useState(false);
+  const [userCollapsed, setUserCollapsed] = useState(false);
 
   const { passed, failed, skipped, total, done, activeAndAfter, completedBefore } = useMemo(() => {
     const passed = steps.filter((s) => s.status === "passed").length;
@@ -18,7 +37,6 @@ export function CheckStepper({ steps, title }: CheckStepperProps) {
     const total = steps.length;
     const done = steps.every((s) => s.status !== "pending" && s.status !== "running");
 
-    // Split steps into "completed leading block" and "active + remaining"
     let firstNonCompleted = steps.findIndex(
       (s) => s.status === "pending" || s.status === "running"
     );
@@ -35,7 +53,22 @@ export function CheckStepper({ steps, title }: CheckStepperProps) {
   const failedPct = (failed / total) * 100;
 
   const canCollapse = completedBefore.length >= 2;
-  const showCollapsed = canCollapse && collapsed;
+
+  // Auto-collapse on mobile when enough steps complete, respect manual toggle
+  const collapsed = canCollapse && (userToggled ? userCollapsed : isMobile);
+
+  const handleToggle = (value: boolean) => {
+    setUserToggled(true);
+    setUserCollapsed(value);
+  };
+
+  // Reset manual toggle when steps reset (all pending again)
+  useEffect(() => {
+    if (steps.every((s) => s.status === "pending")) {
+      setUserToggled(false);
+      setUserCollapsed(false);
+    }
+  }, [steps]);
 
   return (
     <div className={`check-stepper ${done ? (failed > 0 ? "done-fail" : "done-pass") : ""}`}>
@@ -62,11 +95,10 @@ export function CheckStepper({ steps, title }: CheckStepperProps) {
       </div>
 
       <div className="stepper-steps" role="list" aria-label="Check steps">
-        {/* Collapsed completed summary */}
-        {showCollapsed && (
+        {collapsed && (
           <button
             className="collapsed-summary"
-            onClick={() => setCollapsed(false)}
+            onClick={() => handleToggle(false)}
             aria-expanded={false}
           >
             <span className="collapsed-count">{completedBefore.length} passed</span>
@@ -74,23 +106,20 @@ export function CheckStepper({ steps, title }: CheckStepperProps) {
           </button>
         )}
 
-        {/* Expanded completed steps */}
-        {!showCollapsed && completedBefore.map((step, i) => (
+        {!collapsed && completedBefore.map((step, i) => (
           <StepItem key={step.id} step={step} index={i} isLast={false} />
         ))}
 
-        {/* Collapse toggle — show after expanded completed steps */}
-        {canCollapse && !showCollapsed && (
+        {canCollapse && !collapsed && (
           <button
             className="collapsed-summary"
-            onClick={() => setCollapsed(true)}
+            onClick={() => handleToggle(true)}
             aria-expanded={true}
           >
             <span className="collapsed-expand">Hide {completedBefore.length} passed</span>
           </button>
         )}
 
-        {/* Active + remaining steps */}
         {activeAndAfter.map((step, i) => (
           <StepItem
             key={step.id}

@@ -75,20 +75,24 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 6px 8px;
+  padding: 10px 12px;
+  min-height: 44px;
   margin-bottom: 8px;
   background: rgba(34, 197, 94, 0.08);
   border: 1px solid rgba(34, 197, 94, 0.15);
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-passed);
   transition: background 0.15s;
+  touch-action: manipulation;
 }
 
-.collapsed-summary:hover {
-  background: rgba(34, 197, 94, 0.14);
+@media (hover: hover) {
+  .collapsed-summary:hover {
+    background: rgba(34, 197, 94, 0.14);
+  }
 }
 
 .collapsed-count {
@@ -304,6 +308,52 @@
   }
 }
 
+/* --- Mobile: <= 480px --- */
+@media (max-width: 480px) {
+  .check-stepper {
+    padding: 16px;
+    border-radius: 10px;
+  }
+
+  .stepper-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .stepper-summary {
+    margin-bottom: 16px;
+  }
+
+  .progress-track {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .progress-fill {
+    border-radius: 3px;
+  }
+
+  .progress-text {
+    font-size: 13px;
+  }
+
+  .step-label {
+    font-size: 14px;
+  }
+
+  .step-description {
+    font-size: 12px;
+  }
+
+  .step-elapsed {
+    font-size: 12px;
+  }
+
+  .step-content {
+    padding-bottom: 14px;
+  }
+}
+
 /* --- Light mode --- */
 @media (prefers-color-scheme: light) {
   .check-stepper {
@@ -334,15 +384,17 @@
     border-color: rgba(34, 197, 94, 0.12);
   }
 
-  .collapsed-summary:hover {
-    background: rgba(34, 197, 94, 0.1);
-  }
-
   .check-stepper.done-pass {
     border-color: rgba(34, 197, 94, 0.3);
   }
 
   .check-stepper.done-fail {
     border-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+@media (prefers-color-scheme: light) and (hover: hover) {
+  .collapsed-summary:hover {
+    background: rgba(34, 197, 94, 0.1);
   }
 }
